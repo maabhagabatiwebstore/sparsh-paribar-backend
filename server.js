@@ -6,8 +6,18 @@ require("dotenv").config();
 const userRoutes = require("./routes/authRoutes");
 
 const app = express();
+
+const frontendUrl = process.env.CORS_ORIGIN || '*';
+
+// Configure CORS
+app.use(cors({
+  origin: frontendUrl,           // allow only your frontend
+  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true              // if using cookies or auth headers
+}));
 app.use(express.json());
-app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || "*" }));
+//app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || "*" }));
 
 // DB connection
 mongoose.connect(process.env.MONGODB_URI)
