@@ -3,7 +3,11 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 require("dotenv").config();
 
-const userRoutes = require("./routes/authRoutes");
+const authRoutes = require("./routes/authRoutes");
+const userRoutes = require('./routes/userRoutes');
+const paymentRoutes = require("./routes/paymentRoutes");
+
+
 
 const app = express();
 
@@ -17,7 +21,7 @@ app.use(cors({
   credentials: true              // if using cookies or auth headers
 }));
 app.use(express.json());
-//app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") || "*" }));
+
 
 // DB connection
 mongoose.connect(process.env.MONGODB_URI)
@@ -25,7 +29,10 @@ mongoose.connect(process.env.MONGODB_URI)
   .catch(err => console.error("❌ DB error:", err));
 
 // Routes
-app.use("/api/users", userRoutes);
+
+app.use("/api/auth", authRoutes);//local
+app.use('/api/users', userRoutes);
+app.use("/api/payment", paymentRoutes);
 
 // Health check
 app.get("/healthz", (_, res) => res.send("ok"));
