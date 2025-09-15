@@ -47,6 +47,7 @@ exports.register = async (req, res) => {
 };
 
 // Login → send OTP
+// Login → send OTP
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -58,21 +59,31 @@ exports.login = async (req, res) => {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.otp = otp;
-    user.otpExpiry = Date.now() + 5 * 60 * 1000;
+    user.otpExpiry = Date.now() + 5 * 60 * 1000; // 5 mins
     await user.save();
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Your OTP for Login",
-      text: `Your OTP is: ${otp}`,
-    });
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "Your OTP for Login",
+        text: `Your OTP is: ${otp}`,
+      });
+      console.log("✅ OTP email sent to", email);
+    } catch (mailErr) {
+      console.error("❌ Email send error:", mailErr.message);
+      // return here so frontend knows login failed due to mail issue
+      return res.status(500).json({ message: "Failed to send OTP email" });
+    }
 
-    res.json({ message: "✅ OTP sent", user: { id: user._id } });
+    res.json({ message: "✅ OTP sent", user: { id: user._id, email: user.email } });
+
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("❌ Login error:", err.message);
+    res.status(500).json({ message: "Server error during login" });
   }
 };
+
 
 // Verify OTP
 exports.verifyLoginOtp = async (req, res) => {
