@@ -5,17 +5,18 @@ export const createOrder = async (req, res) => {
     const { orderId, orderAmount, customerName, customerEmail, customerPhone } = req.body;
 
     const response = await axios.post(
-        process.env.CASHFREE_URL,
+      process.env.CASHFREE_URL,
       {
         order_id: orderId,
         order_amount: orderAmount,
         order_currency: "INR",
         customer_details: {
-          customer_id: customerEmail,
-          customer_email: customerEmail,
+          customer_id: `cust_${Date.now()}`,  // ✅ safe alphanumeric ID
+          customer_email: customerEmail,      // ✅ keep email here
           customer_phone: customerPhone,
           customer_name: customerName,
         },
+        order_note: "Test Payment from Sparsh Paribar",
       },
       {
         headers: {
@@ -30,7 +31,10 @@ export const createOrder = async (req, res) => {
     res.json(response.data);
   } catch (err) {
     console.error("❌ Cashfree Error:", err.response?.data || err.message);
-    res.status(500).json({ error: "Payment order creation failed" });
+    res.status(500).json({
+      error: "Payment order creation failed",
+      details: err.response?.data || err.message,
+    });
   }
 };
 
