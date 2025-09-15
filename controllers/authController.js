@@ -1,15 +1,9 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
-const nodemailer = require("nodemailer");
+const sendEmail = require("../utils/mailer");
 
 // Mailer setup
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+
 
 // Register
 exports.register = async (req, res) => {
@@ -46,7 +40,9 @@ exports.register = async (req, res) => {
   }
 };
 
-// Login → send OTP
+
+
+
 // Login → send OTP
 exports.login = async (req, res) => {
   try {
@@ -59,30 +55,21 @@ exports.login = async (req, res) => {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.otp = otp;
-    user.otpExpiry = Date.now() + 5 * 60 * 1000; // 5 mins
+    user.otpExpiry = Date.now() + 5 * 60 * 1000;
     await user.save();
 
-    try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: "Your OTP for Login",
-        text: `Your OTP is: ${otp}`,
-      });
-      console.log("✅ OTP email sent to", email);
-    } catch (mailErr) {
-      console.error("❌ Email send error:", mailErr.message);
-      // return here so frontend knows login failed due to mail issue
-      return res.status(500).json({ message: "Failed to send OTP email" });
-    }
+    await sendEmail(
+      email,
+      "Your OTP for Login",
+      `Your OTP is: <b>${otp}</b> (valid for 5 minutes)`
+    );
 
-    res.json({ message: "✅ OTP sent", user: { id: user._id, email: user.email } });
-
+    res.json({ message: "✅ OTP sent", user: { id: user._id } });
   } catch (err) {
-    console.error("❌ Login error:", err.message);
-    res.status(500).json({ message: "Server error during login" });
+    res.status(500).json({ message: err.message });
   }
 };
+
 
 
 // Verify OTP
