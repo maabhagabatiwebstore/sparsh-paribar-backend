@@ -105,18 +105,18 @@ exports.forgotPassword = async (req, res) => {
     user.otpExpiry = Date.now() + 5 * 60 * 1000;
     await user.save();
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Password Reset OTP",
-      text: `Your OTP is: ${otp}`,
-    });
+    await sendEmail(
+      email,
+      "Password Reset OTP",
+      `Your OTP is: <b>${otp}</b> (valid for 5 minutes)`
+    );
 
     res.json({ message: "✅ OTP sent for password reset" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 // Reset Password
 exports.resetPassword = async (req, res) => {
