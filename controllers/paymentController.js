@@ -1,6 +1,6 @@
-import axios from "axios";
+const axios = require("axios");
 
-export const createOrder = async (req, res) => {
+const createOrder = async (req, res) => {
   try {
     const { orderId, orderAmount, customerName, customerEmail, customerPhone } = req.body;
 
@@ -11,12 +11,11 @@ export const createOrder = async (req, res) => {
         order_amount: orderAmount,
         order_currency: "INR",
         customer_details: {
-          customer_id: `cust_${Date.now()}`,  // ✅ safe alphanumeric ID
-          customer_email: customerEmail,      // ✅ keep email here
+          customer_id: customerEmail.replace(/[^a-zA-Z0-9_-]/g, ""), // ✅ Fix for Cashfree
+          customer_email: customerEmail,
           customer_phone: customerPhone,
           customer_name: customerName,
         },
-        order_note: "Test Payment from Sparsh Paribar",
       },
       {
         headers: {
@@ -31,19 +30,18 @@ export const createOrder = async (req, res) => {
     res.json(response.data);
   } catch (err) {
     console.error("❌ Cashfree Error:", err.response?.data || err.message);
-    res.status(500).json({
-      error: "Payment order creation failed",
-      details: err.response?.data || err.message,
-    });
+    res.status(500).json({ error: "Payment order creation failed" });
   }
 };
 
-export const paymentSuccess = (req, res) => {
+const paymentSuccess = (req, res) => {
   const { order_id, order_status } = req.query;
   res.json({ success: true, order_id, order_status });
 };
 
-export const paymentFailure = (req, res) => {
+const paymentFailure = (req, res) => {
   const { order_id, order_status } = req.query;
   res.json({ success: false, order_id, order_status });
 };
+
+module.exports = { createOrder, paymentSuccess, paymentFailure };

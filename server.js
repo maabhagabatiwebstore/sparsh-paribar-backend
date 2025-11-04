@@ -2,41 +2,71 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 require("dotenv").config();
+const path = require("path");
+const fs = require("fs");
 
+// Import routes
 const authRoutes = require("./routes/authRoutes");
-const userRoutes = require('./routes/userRoutes');
+const userRoutes = require("./routes/userRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
-
-
+const memberRoutes = require("./routes/memberRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const app = express();
 
-const frontendUrl = process.env.CORS_ORIGIN || '*';
+// ✅ Allowed frontend origins
+const allowedOrigins = [
+  process.env.CORS_ORIGIN // live frontend
+             
+];
 
-// Configure CORS
-app.use(cors({
-  origin: frontendUrl,           // allow only your frontend
-  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true              // if using cookies or auth headers
-}));
+// ✅ CORS configuration (handles preflight)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
+
+  // Handle preflight OPTIONS request
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 app.use(express.json());
 
-
-// DB connection
-mongoose.connect(process.env.MONGODB_URI)
+// ✅ Connect MongoDB
+mongoose
+  .connect(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
   .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.error("❌ DB error:", err));
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-// Routes
-
-app.use("/api/auth", authRoutes);//local
-app.use('/api/users', userRoutes);
+// ✅ API Routes
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/payment", paymentRoutes);
+app.use("/api/members", memberRoutes);
+app.use("/api/admin", adminRoutes);
 
-// Health check
+// ✅ Static uploads folder
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+app.use("/uploads", express.static(uploadDir));
+
+// ✅ Health check endpoint
 app.get("/healthz", (_, res) => res.send("ok"));
 
-// Start
-const port = process.env.PORT || 4000;
-app.listen(port, "0.0.0.0", () => console.log(`Server running on ${port}`));
+// ✅ Start server
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`🚀 Server running on port ${PORT}`)
+);

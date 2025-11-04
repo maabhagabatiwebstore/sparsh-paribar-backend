@@ -9,6 +9,8 @@ const userSchema = new mongoose.Schema({
   dob: { type: Date },
   gender: { type: String, enum: ['Male', 'Female', 'Other'] },
   joiningDate: { type: Date, default: Date.now },
+   profileImage: { type: String, default: "" }, 
+   role: { type: String, enum: ["user", "admin"], default: "user" },
   otp: { type: String },
   otpExpiry: { type: Date }
 }, { timestamps: true });
