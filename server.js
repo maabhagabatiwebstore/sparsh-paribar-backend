@@ -1,9 +1,8 @@
 const express = require("express");
-const cors = require("cors");
 const mongoose = require("mongoose");
-require("dotenv").config();
 const path = require("path");
 const fs = require("fs");
+require("dotenv").config();
 
 // Import routes
 const authRoutes = require("./routes/authRoutes");
@@ -15,12 +14,9 @@ const adminRoutes = require("./routes/adminRoutes");
 const app = express();
 
 // ✅ Allowed frontend origins
-const allowedOrigins = [
-  process.env.CORS_ORIGIN // live frontend
-             
-];
+const allowedOrigins = [process.env.CORS_ORIGIN];
 
-// ✅ CORS configuration (handles preflight)
+// ✅ CORS middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (allowedOrigins.includes(origin)) {
@@ -30,14 +26,18 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.header("Access-Control-Allow-Credentials", "true");
 
-  // Handle preflight OPTIONS request
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
-app.use(express.json());
+// ✅ Parse JSON normally (webhook requires raw body)
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf.toString();
+    },
+  })
+);
 
 // ✅ Connect MongoDB
 mongoose
@@ -48,21 +48,19 @@ mongoose
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-// ✅ API Routes
+// ✅ Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/payment", paymentRoutes);
+app.use("/api/payments", paymentRoutes); // 🟢 fixed — plural to match webhook URL
 app.use("/api/members", memberRoutes);
 app.use("/api/admin", adminRoutes);
 
-// ✅ Static uploads folder
+// ✅ Static uploads
 const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 app.use("/uploads", express.static(uploadDir));
 
-// ✅ Health check endpoint
+// ✅ Health check
 app.get("/healthz", (_, res) => res.send("ok"));
 
 // ✅ Start server

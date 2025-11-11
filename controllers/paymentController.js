@@ -1,13 +1,11 @@
 const axios = require("axios");
-const Payment = require("../models/paymentModel"); // ✅ Mongoose model
+const Payment = require("../models/paymentModel");
 require("dotenv").config();
 
 // ---------------------- CREATE ORDER -----------------------
 const createOrder = async (req, res) => {
   try {
     const { orderAmount, customerName, customerEmail, customerPhone, month, year } = req.body;
-
-    // ✅ Generate unique orderId automatically
     const orderId = `ORD-${Date.now()}-${month}`;
 
     const response = await axios.post(
@@ -23,8 +21,8 @@ const createOrder = async (req, res) => {
           customer_name: customerName,
         },
         order_meta: {
-          return_url: `https://sparshparibar.netlify.app/user-profile/payment-success?order_id=${orderId}`,
-          notify_url: `${process.env.BACKEND_URL}/api/payments/webhook`, // ✅ Webhook to auto update DB
+          return_url: `${process.env.CORS_ORIGIN}/user-profile/payment-success?order_id=${orderId}`,
+          notify_url: `${process.env.BACKEND_URL}/api/payments/webhook`, // ✅ must match plural route
         },
       },
       {
@@ -37,8 +35,7 @@ const createOrder = async (req, res) => {
       }
     );
 
-    // Save order in DB as "Pending"
-    const newPayment = new Payment({
+    await Payment.create({
       orderId,
       orderAmount,
       month,
@@ -49,7 +46,6 @@ const createOrder = async (req, res) => {
       status: "PENDING",
       createdAt: new Date(),
     });
-    await newPayment.save();
 
     res.json(response.data);
   } catch (err) {
@@ -58,52 +54,64 @@ const createOrder = async (req, res) => {
   }
 };
 
-// ---------------------- PAYMENT SUCCESS (REDIRECT) -----------------------
+// ---------------------- PAYMENT SUCCESS (redirect) -----------------------
 const paymentSuccess = async (req, res) => {
   try {
-    const { order_id, order_status } = req.query;
+    const { order_id } = req.query;
 
-    // ✅ Update status in DB
+    const verify = await axios.get(`${process.env.CASHFREE_URL}/${order_id}`, {
+      headers: {
+        "x-client-id": process.env.CASHFREE_APP_ID,
+        "x-client-secret": process.env.CASHFREE_SECRET_KEY,
+        "x-api-version": "2022-09-01",
+      },
+    });
+
+    const status = verify.data?.order_status || "UNKNOWN";
+
     await Payment.findOneAndUpdate(
       { orderId: order_id },
-      { status: order_status, paidAt: new Date() },
+      {
+        status: status === "PAID" || status === "SUCCESS" ? "SUCCESS" : status,
+        paidAt: new Date(),
+      },
       { new: true }
     );
 
-    res.json({ success: true, order_id, order_status });
+    // redirect back to frontend success page
+    res.redirect(`${process.env.CORS_ORIGIN}/user-profile/payment-success?status=${status}&order_id=${order_id}`);
   } catch (err) {
     console.error("❌ Payment success update error:", err);
-    res.status(500).json({ error: "Failed to update success payment" });
+    res.status(500).json({ error: "Failed to verify payment success" });
   }
 };
 
-// ---------------------- PAYMENT FAILURE (REDIRECT) -----------------------
+// ---------------------- PAYMENT FAILURE -----------------------
 const paymentFailure = async (req, res) => {
   try {
-    const { order_id, order_status } = req.query;
+    const { order_id } = req.query;
     await Payment.findOneAndUpdate(
       { orderId: order_id },
-      { status: order_status },
+      { status: "FAILED" },
       { new: true }
     );
-
-    res.json({ success: false, order_id, order_status });
+    res.json({ success: false, order_id });
   } catch (err) {
     console.error("❌ Payment failure update error:", err);
     res.status(500).json({ error: "Failed to update failed payment" });
   }
 };
 
-// ---------------------- GET HISTORY (for frontend table) -----------------------
+// ---------------------- PAYMENT HISTORY -----------------------
 const getPaymentHistory = async (req, res) => {
   try {
-    const payments = await Payment.find({ status: "SUCCESS" }).sort({ paidAt: -1 });
+    const payments = await Payment.find().sort({ createdAt: -1 });
     res.json(
       payments.map((p) => ({
-        name: p.month,
+        month: p.month,
         amount: p.orderAmount,
-        date: p.paidAt,
         status: p.status,
+        date: p.paidAt || p.createdAt,
       }))
     );
   } catch (err) {
@@ -112,20 +120,29 @@ const getPaymentHistory = async (req, res) => {
   }
 };
 
-// ---------------------- OPTIONAL WEBHOOK (Cashfree auto confirmation) -----------------------
+// ---------------------- CASHFREE WEBHOOK -----------------------
 const cashfreeWebhook = async (req, res) => {
   try {
     const event = req.body;
+    console.log("🔔 Webhook received:", event?.type);
 
-    if (event.type === "PAYMENT_SUCCESS") {
+    if (event?.type === "PAYMENT_SUCCESS") {
       const orderId = event.data.order.order_id;
       await Payment.findOneAndUpdate(
         { orderId },
-        { status: "SUCCESS", paidAt: new Date() }
+        { status: "SUCCESS", paidAt: new Date() },
+        { new: true }
+      );
+    } else if (event?.type === "PAYMENT_FAILED") {
+      const orderId = event.data.order.order_id;
+      await Payment.findOneAndUpdate(
+        { orderId },
+        { status: "FAILED" },
+        { new: true }
       );
     }
 
-    res.status(200).send("Webhook received");
+    res.status(200).send("Webhook processed");
   } catch (err) {
     console.error("❌ Webhook error:", err);
     res.status(500).send("Error processing webhook");
